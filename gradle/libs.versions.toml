@@ -29,6 +29,7 @@ ui = "1.7.5"
 uiToolingPreview = "1.7.5"
 uiToolingPreviewVersion = "1.5.0"
 uiVersion = "1.5.0"
+coreSplashscreen = "1.0.1"
 
 [libraries]
 activity-compose-v170 = { module = "androidx.activity:activity-compose", version.ref = "androidxActivityCompose" }
@@ -66,6 +67,7 @@ play-services-location = { module = "com.google.android.gms:play-services-locati
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
 ui = { module = "androidx.compose.ui:ui", version.ref = "ui" }
 ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview", version.ref = "uiToolingPreview" }
+androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
