@@ -11,7 +11,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.myapplication"
+        applicationId = "com.example.mywaytransit"
         minSdk = 24
         targetSdk = 34
         versionCode = 1

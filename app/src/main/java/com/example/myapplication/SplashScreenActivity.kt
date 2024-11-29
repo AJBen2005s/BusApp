@@ -1,6 +1,5 @@
 package com.example.myapplication
 
-import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
@@ -19,25 +18,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
-@SuppressLint("CustomSplashScreen")
 class SplashScreenActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Install the splash screen
+        // Install the splash screen (This handles the splash screen animation)
         installSplashScreen()
-
-        // Navigate to the main activity after a delay
-        Handler().postDelayed({
-            val intent = Intent(this, MainActivity::class.java)
-            startActivity(intent)
-            finish()
-        }, 4000)  // 2000ms (2 seconds) delay before moving to the main screen
 
         // Set the splash screen content
         setContent {
             SplashScreenContent()
         }
+
+        // Navigate to the main activity after a delay of 4 seconds
+        Handler().postDelayed({
+            val intent = Intent(this, MainActivity::class.java)
+            startActivity(intent)
+            finish()  // Finish SplashScreenActivity so it doesn't remain in the back stack
+        }, 4000)  // Delay for 4 seconds
     }
 }
 
