@@ -32,6 +32,8 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
@@ -142,15 +144,18 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
                 val screenHeight = configuration.screenHeightDp.dp
                 val maxHeight = (screenHeight * 5) / 8 // Calculate 5/8th of the screen height
 
-                // Drawer content with height restricted to 5/8 of the screen
+                // Drawer content with height restricted to 5/8 of the screen, but scrollable
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = maxHeight) // Limit height to a maximum of 5/8 screen
                         .background(color = MaterialTheme.colors.surface) // Plain background
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    Column {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
                         // Dashed line indicator
                         Box(
                             modifier = Modifier
@@ -161,22 +166,40 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
                             DashedLineIndicator()
                         }
 
-                        // Search bar
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            label = { Text("Search") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        // Make the content scrollable
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(vertical = 8.dp)
+                        ) {
+                            // Search bar
+                            item {
+                                OutlinedTextField(
+                                    value = searchQuery,
+                                    onValueChange = { searchQuery = it },
+                                    label = { Text("Search") },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                            }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                            // Drawer content
+                            item {
+                                Text("Nearby Buses:", style = MaterialTheme.typography.h6)
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
 
-                        // Drawer content
-                        Text("Nearby Buses:", style = MaterialTheme.typography.h6)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        buses.forEach { bus ->
-                            Text("Bus ${bus.busId}: Route ${bus.routeId}")
-                            Spacer(modifier = Modifier.height(4.dp))
+                            // Add each bus as a separate item
+                            items(buses) { bus ->
+                                Text("Bus ${bus.busId}: Route ${bus.routeId}")
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
+
+                            // Optional: Add a dummy footer or extra space if needed
+                            item {
+                                Spacer(modifier = Modifier.height(24.dp))
+                                Text("End of buses list", style = MaterialTheme.typography.body2)
+                            }
                         }
                     }
                 }
@@ -216,13 +239,18 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
                             // Add user marker again (in case of re-layout)
                             mapView.overlays.add(userMarker)
 
-                            // Add bus markers
+                            val busIcon by lazy { resizeDrawable(context, R.drawable.bus, 100, 100) } // Resize once
+
                             buses.forEach { bus ->
                                 val busLocation = GeoPoint(bus.latitude, bus.longitude)
+
                                 val busMarker = Marker(mapView)
                                 busMarker.position = busLocation
                                 busMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                                 busMarker.title = "Bus ${bus.busId}: Route ${bus.routeId}"
+
+                                // Use the pre-resized icon
+                                busMarker.icon = busIcon
 
                                 // Add the marker to the map
                                 mapView.overlays.add(busMarker)
