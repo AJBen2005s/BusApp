@@ -1,7 +1,12 @@
 package com.example.myapplication
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.location.Location
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -123,11 +128,26 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
                 mapController.setZoom(18.0)
                 mapController.setCenter(currentLoc)
 
+                fun resizeDrawable(context: Context, drawableRes: Int, width: Int, height: Int): Drawable {
+                    // Load the drawable as a Bitmap
+                    val bitmap = BitmapFactory.decodeResource(context.resources, drawableRes)
+
+                    // Resize the bitmap
+                    val scaledBitmap = Bitmap.createScaledBitmap(bitmap, width, height, false)
+
+                    // Convert Bitmap to Drawable
+                    return BitmapDrawable(context.resources, scaledBitmap)
+                }
+
                 // Add a marker at the current location
+                val userIcon = resizeDrawable(context, R.drawable.user, 100, 100) // Adjust the size here
+
                 val userMarker = Marker(mapView)
                 userMarker.position = currentLoc
                 userMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                 userMarker.title = "You are here"
+
+                userMarker.icon = userIcon
                 mapView.overlays.add(userMarker)
 
                 // Use onGlobalLayoutListener to ensure map has been laid out
@@ -140,22 +160,14 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
 
                     // Add bus markers
                     buses.forEach { bus ->
-                        // Ensure valid latitude and longitude before adding markers
-                        if (bus.latitude != 0.0 && bus.longitude != 0.0) {
-                            val busLocation = GeoPoint(bus.latitude, bus.longitude)
-                            val busMarker = Marker(mapView)
-                            busMarker.position = busLocation
-                            busMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                            busMarker.title = "Bus ${bus.busId}, Route ${bus.routeId}"
+                        val busLocation = GeoPoint(bus.latitude, bus.longitude)
+                        val busMarker = Marker(mapView)
+                        busMarker.position = busLocation
+                        busMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                        busMarker.title = "Bus ${bus.busId}, Route ${bus.routeId}"
 
-                            // Add the marker to the map
-                            mapView.overlays.add(busMarker)
-
-                            // Log the addition of the marker
-                            println("Added marker for Bus ${bus.busId} at (${bus.latitude}, ${bus.longitude})")
-                        } else {
-                            println("Invalid coordinates for bus ${bus.busId}")
-                        }
+                        // Add the marker to the map
+                        mapView.overlays.add(busMarker)
                     }
 
                     // Force a redraw of the map to ensure the markers appear

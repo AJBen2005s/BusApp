@@ -32,7 +32,7 @@ class SplashScreenActivity : ComponentActivity() {
             val intent = Intent(this, MainActivity::class.java)
             startActivity(intent)
             finish()
-        }, 2000)  // 2000ms (2 seconds) delay before moving to the main screen
+        }, 4000)  // 2000ms (2 seconds) delay before moving to the main screen
 
         // Set the splash screen content
         setContent {
