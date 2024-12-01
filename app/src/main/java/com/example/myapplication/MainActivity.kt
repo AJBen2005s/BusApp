@@ -39,7 +39,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.ui.platform.LocalContext
 
+import com.google.gson.Gson
+import com.google.gson.JsonObject
+import com.google.gson.JsonArray
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.io.IOException
 
 
 class MainActivity : ComponentActivity() {
@@ -86,10 +94,13 @@ class MainActivity : ComponentActivity() {
 fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
     var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
     var buses by remember { mutableStateOf<List<Bus>>(emptyList()) }
+    var busStops by remember { mutableStateOf<List<BusStop>>(emptyList()) }
     val drawerState = rememberBottomSheetScaffoldState()
 
     // Search query state
     var searchQuery by remember { mutableStateOf(TextFieldValue("")) }
+
+    val context = LocalContext.current
 
     // Function to fetch buses
     suspend fun fetchBusesAndUpdateMarkers() {
@@ -108,6 +119,19 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
         }
     }
 
+    // Function to fetch GeoJSON data from the assets folder
+    suspend fun fetchBusStopsAndUpdateMarkers() {
+        try {
+            // Read the GeoJSON file from assets
+            val geoJson = loadGeoJsonFromAssets(context, "busstops.geojson")
+
+            // Parse the GeoJSON and update bus stops
+            busStops = parseBusStopsFromGeoJson(geoJson)
+        } catch (e: Exception) {
+            println("Error fetching bus stops: ${e.message}")
+        }
+    }
+
     // Request the current location
     LaunchedEffect(Unit) {
         fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
@@ -119,6 +143,7 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
         // Periodically fetch and update buses
         while (true) {
             fetchBusesAndUpdateMarkers()
+            fetchBusStopsAndUpdateMarkers()
             delay(7000) // Update every 7 seconds
         }
     }
@@ -220,25 +245,44 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
                         mapController.setZoom(18.0)
                         mapController.setCenter(currentLoc)
 
-                        // Add a marker at the current location
-                        val userIcon = resizeDrawable(context, R.drawable.user, 100, 100) // Adjust the size here
-
-                        val userMarker = Marker(mapView)
-                        userMarker.position = currentLoc
-                        userMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                        userMarker.title = "You are here"
-
-                        userMarker.icon = userIcon
-                        mapView.overlays.add(userMarker)
-
                         // Use onGlobalLayoutListener to ensure map has been laid out
                         mapView.viewTreeObserver.addOnPreDrawListener {
-                            // Clear previous markers
+
+                            // Clear previous markers only if necessary
                             mapView.overlays.clear()
 
                             // Add user marker again (in case of re-layout)
+                            val userIcon = resizeDrawable(context, R.drawable.user, 100, 100) // Adjust the size here
+
+                            val userMarker = Marker(mapView)
+                            userMarker.position = currentLoc
+                            userMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                            userMarker.title = "You are here"
+                            userMarker.icon = userIcon
                             mapView.overlays.add(userMarker)
 
+                            // Add bus stop markers
+                            val busStopIcon by lazy { resizeDrawable(context, R.drawable.busstop, 100, 100) } // Resize once
+                            val busStopMarkers = mutableMapOf<String, Marker>()
+
+                            busStops.forEach { busStop ->
+                                var marker = busStopMarkers[busStop.id]
+                                if (marker == null) {
+                                    // If marker doesn't exist, create one
+                                    marker = Marker(mapView)
+                                    marker.position = GeoPoint(busStop.latitude, busStop.longitude)
+                                    marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                                    marker.title = busStop.name
+                                    marker.icon = busStopIcon
+                                    mapView.overlays.add(marker)
+                                    busStopMarkers[busStop.id] = marker
+                                } else {
+                                    // Update the position of the existing marker
+                                    marker.position = GeoPoint(busStop.latitude, busStop.longitude)
+                                }
+                            }
+
+                            // Add bus markers
                             val busIcon by lazy { resizeDrawable(context, R.drawable.bus, 100, 100) } // Resize once
 
                             buses.forEach { bus ->
@@ -326,4 +370,52 @@ fun resizeDrawable(context: Context, drawableRes: Int, width: Int, height: Int):
     val bitmap = BitmapFactory.decodeResource(context.resources, drawableRes)
     val scaledBitmap = Bitmap.createScaledBitmap(bitmap, width, height, false)
     return BitmapDrawable(context.resources, scaledBitmap)
+}
+
+// Function to load the GeoJSON file from the assets folder
+private suspend fun loadGeoJsonFromAssets(context: Context, fileName: String): String {
+    return withContext(Dispatchers.IO) {
+        try {
+            // Open the GeoJSON file from assets
+            val inputStream = context.assets.open(fileName)
+
+            // Read the file content into a string
+            inputStream.bufferedReader().use { reader ->
+                reader.readText()
+            }
+        } catch (e: IOException) {
+            throw Exception("Error loading GeoJSON file from assets: ${e.message}")
+        }
+    }
+}
+
+// Function to parse GeoJSON and extract bus stops
+fun parseBusStopsFromGeoJson(geoJson: String): List<BusStop> {
+    val busStops = mutableListOf<BusStop>()
+
+    try {
+        val jsonObject = JSONObject(geoJson)
+        val features = jsonObject.getJSONArray("features")
+
+        for (i in 0 until features.length()) {
+            val feature = features.getJSONObject(i)
+            val properties = feature.getJSONObject("properties")
+            val geometry = feature.getJSONObject("geometry")
+            val coordinates = geometry.getJSONArray("coordinates")
+
+            // Extract necessary details
+            val id = properties.getString("BUSSTOPID")
+            val name = properties.getString("LOCATION")
+            val accessibility = properties.getString("ACCESSIBLE")
+            val latitude = coordinates.getDouble(1) // Latitude is at index 1
+            val longitude = coordinates.getDouble(0) // Longitude is at index 0
+
+            // Create BusStop object
+            busStops.add(BusStop(id, name, accessibility, latitude, longitude))
+        }
+    } catch (e: Exception) {
+        println("Error parsing GeoJSON: ${e.message}")
+    }
+
+    return busStops
 }
