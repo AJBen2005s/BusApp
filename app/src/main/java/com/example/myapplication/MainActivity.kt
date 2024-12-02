@@ -47,6 +47,7 @@ import com.google.gson.JsonArray
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import org.osmdroid.views.overlay.Polyline
 import java.io.IOException
 
 
@@ -95,6 +96,7 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
     var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
     var buses by remember { mutableStateOf<List<Bus>>(emptyList()) }
     var busStops by remember { mutableStateOf<List<BusStop>>(emptyList()) }
+    var busRoutes by remember { mutableStateOf<List<BusRoute>>(emptyList()) }
     val drawerState = rememberBottomSheetScaffoldState()
 
     // Search query state
@@ -132,6 +134,19 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
         }
     }
 
+    // Function to fetch GeoJSON data from the assets folder
+    suspend fun fetchRoutesAndUpdateMarkers() {
+        try {
+            // Read the GeoJSON file from assets
+            val geoJson = loadGeoJsonFromAssets(context, "routes.geojson")
+
+            // Parse the GeoJSON and update bus stops
+            busRoutes = parseBusRoutesFromGeoJson(geoJson)
+        } catch (e: Exception) {
+            println("Error fetching bus routes: ${e.message}")
+        }
+    }
+
     // Request the current location
     LaunchedEffect(Unit) {
         fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
@@ -144,6 +159,7 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
         while (true) {
             fetchBusesAndUpdateMarkers()
             fetchBusStopsAndUpdateMarkers()
+            fetchRoutesAndUpdateMarkers()
             delay(7000) // Update every 7 seconds
         }
     }
@@ -245,15 +261,12 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
                         mapController.setZoom(18.0)
                         mapController.setCenter(currentLoc)
 
-                        // Use onGlobalLayoutListener to ensure map has been laid out
                         mapView.viewTreeObserver.addOnPreDrawListener {
-
-                            // Clear previous markers only if necessary
+                            // Clear previous overlays
                             mapView.overlays.clear()
 
-                            // Add user marker again (in case of re-layout)
-                            val userIcon = resizeDrawable(context, R.drawable.user, 100, 100) // Adjust the size here
-
+                            // Add user marker
+                            val userIcon = resizeDrawable(context, R.drawable.user, 100, 100) // Adjust size here
                             val userMarker = Marker(mapView)
                             userMarker.position = currentLoc
                             userMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
@@ -262,29 +275,38 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
                             mapView.overlays.add(userMarker)
 
                             // Add bus stop markers
-                            val busStopIcon by lazy { resizeDrawable(context, R.drawable.busstop, 100, 100) } // Resize once
-                            val busStopMarkers = mutableMapOf<String, Marker>()
-
+                            val busStopIcon by lazy { resizeDrawable(context, R.drawable.busstop, 100, 100) }
                             busStops.forEach { busStop ->
-                                var marker = busStopMarkers[busStop.id]
-                                if (marker == null) {
-                                    // If marker doesn't exist, create one
-                                    marker = Marker(mapView)
-                                    marker.position = GeoPoint(busStop.latitude, busStop.longitude)
-                                    marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                                    marker.title = busStop.name
-                                    marker.icon = busStopIcon
-                                    mapView.overlays.add(marker)
-                                    busStopMarkers[busStop.id] = marker
-                                } else {
-                                    // Update the position of the existing marker
-                                    marker.position = GeoPoint(busStop.latitude, busStop.longitude)
+                                val marker = Marker(mapView)
+                                marker.position = GeoPoint(busStop.latitude, busStop.longitude)
+                                marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                                marker.title = busStop.name
+                                marker.icon = busStopIcon
+                                mapView.overlays.add(marker)
+                            }
+
+                            // Add bus routes
+                            busRoutes.forEach { busRoute ->
+                                busRoute.coordinates.forEach { segment ->
+                                    // Convert each segment to GeoPoints
+                                    val geoPoints = segment.map { (latitude, longitude) ->
+                                        GeoPoint(latitude, longitude)
+                                    }
+
+                                    // Create a polyline
+                                    val polyline = org.osmdroid.views.overlay.Polyline()
+                                    polyline.setPoints(geoPoints)
+                                    polyline.color = android.graphics.Color.BLUE // Set the line color
+                                    polyline.width = 5.0f // Set line width
+                                    polyline.title = busRoute.routeTitle
+
+                                    // Add polyline to the map
+                                    mapView.overlays.add(polyline)
                                 }
                             }
 
                             // Add bus markers
-                            val busIcon by lazy { resizeDrawable(context, R.drawable.bus, 100, 100) } // Resize once
-
+                            val busIcon by lazy { resizeDrawable(context, R.drawable.bus, 100, 100) }
                             buses.forEach { bus ->
                                 val busLocation = GeoPoint(bus.latitude, bus.longitude)
 
@@ -292,17 +314,14 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
                                 busMarker.position = busLocation
                                 busMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                                 busMarker.title = "Bus ${bus.busId}: Route ${bus.routeId}"
-
-                                // Use the pre-resized icon
                                 busMarker.icon = busIcon
 
-                                // Add the marker to the map
                                 mapView.overlays.add(busMarker)
                             }
 
-                            // Force a redraw of the map to ensure the markers appear
+                            // Redraw the map
                             mapView.invalidate()
-                            true // Allow the map to be drawn
+                            true // Allow map to draw
                         }
                         mapView
                     },
@@ -418,4 +437,53 @@ fun parseBusStopsFromGeoJson(geoJson: String): List<BusStop> {
     }
 
     return busStops
+}
+
+// Function to parse GeoJSON and extract bus routes
+fun parseBusRoutesFromGeoJson(geoJson: String): List<BusRoute> {
+    val busRoutes = mutableListOf<BusRoute>()
+
+    try {
+        val jsonObject = JSONObject(geoJson)
+        val features = jsonObject.getJSONArray("features")
+
+        for (i in 0 until features.length()) {
+            val feature = features.getJSONObject(i)
+            val properties = feature.getJSONObject("properties")
+            val geometry = feature.getJSONObject("geometry")
+
+            // Check if the route has a ROUTE_NUM
+            if (properties.has("ROUTE_NUM")) {
+                val routeNum = properties.getString("ROUTE_NUM")
+                val routeTitle = properties.getString("TITLE")
+
+                // Extract coordinates (MultiLineString) for the route
+                val coordinates = geometry.getJSONArray("coordinates")
+                val routeCoordinates = mutableListOf<List<Pair<Double, Double>>>()
+
+                // Iterate over each path segment
+                for (j in 0 until coordinates.length()) {
+                    val segment = coordinates.getJSONArray(j)
+                    val segmentCoordinates = mutableListOf<Pair<Double, Double>>()
+
+                    // Each segment contains multiple points
+                    for (k in 0 until segment.length()) {
+                        val point = segment.getJSONArray(k)
+                        val longitude = point.getDouble(0)
+                        val latitude = point.getDouble(1)
+                        segmentCoordinates.add(Pair(latitude, longitude))
+                    }
+
+                    routeCoordinates.add(segmentCoordinates)
+                }
+
+                // Create a BusRoute object and add it to the list
+                busRoutes.add(BusRoute(routeNum, routeTitle, routeCoordinates))
+            }
+        }
+    } catch (e: Exception) {
+        println("Error parsing GeoJSON: ${e.message}")
+    }
+
+    return busRoutes
 }
