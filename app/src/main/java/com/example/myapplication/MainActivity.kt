@@ -11,6 +11,7 @@ import android.location.Location
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.*
@@ -26,28 +27,25 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
-import kotlinx.coroutines.delay
 import org.osmdroid.config.Configuration
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.platform.LocalContext
 
-import com.google.gson.Gson
-import com.google.gson.JsonObject
-import com.google.gson.JsonArray
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import org.osmdroid.views.overlay.Polyline
 import java.io.IOException
 
 
@@ -90,25 +88,29 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@SuppressLint("MissingPermission", "UnusedMaterialScaffoldPaddingParameter")
+@SuppressLint("UnusedMaterialScaffoldPaddingParameter", "MissingPermission")
 @Composable
 fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
     var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
     var buses by remember { mutableStateOf<List<Bus>>(emptyList()) }
     var busStops by remember { mutableStateOf<List<BusStop>>(emptyList()) }
     var busRoutes by remember { mutableStateOf<List<BusRoute>>(emptyList()) }
+    var filteredBuses by remember { mutableStateOf<List<Bus>>(emptyList()) }
+    var filteredBusStops by remember { mutableStateOf<List<BusStop>>(emptyList()) }
+    var filteredRoutes by remember { mutableStateOf<List<BusRoute>>(emptyList()) }
     val drawerState = rememberBottomSheetScaffoldState()
 
     // Search query state
     var searchQuery by remember { mutableStateOf(TextFieldValue("")) }
+    var searchQueryFilteredRoutes by remember { mutableStateOf<List<BusRoute>>(emptyList()) }
 
     val context = LocalContext.current
 
-    // Function to fetch buses
-    suspend fun fetchBusesAndUpdateMarkers() {
-        try {
+    // Fetch buses, bus stops, and routes as before
+    suspend fun fetchBuses(): List<Bus> {
+        return try {
             val busResponse = RetrofitInstance.api.getBuses()
-            buses = busResponse.entity.map { entity ->
+            busResponse.entity.map { entity ->
                 Bus(
                     busId = entity.vehicle.vehicle.id,
                     routeId = entity.vehicle.trip.routeId,
@@ -118,36 +120,30 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
             }
         } catch (e: Exception) {
             println("Error fetching buses: ${e.message}")
+            emptyList()
         }
     }
 
-    // Function to fetch GeoJSON data from the assets folder
-    suspend fun fetchBusStopsAndUpdateMarkers() {
-        try {
-            // Read the GeoJSON file from assets
+    suspend fun fetchBusStops(): List<BusStop> {
+        return try {
             val geoJson = loadGeoJsonFromAssets(context, "busstops.geojson")
-
-            // Parse the GeoJSON and update bus stops
-            busStops = parseBusStopsFromGeoJson(geoJson)
+            parseBusStopsFromGeoJson(geoJson)
         } catch (e: Exception) {
             println("Error fetching bus stops: ${e.message}")
+            emptyList()
         }
     }
 
-    // Function to fetch GeoJSON data from the assets folder
-    suspend fun fetchRoutesAndUpdateMarkers() {
-        try {
-            // Read the GeoJSON file from assets
+    suspend fun fetchRoutes(): List<BusRoute> {
+        return try {
             val geoJson = loadGeoJsonFromAssets(context, "routes.geojson")
-
-            // Parse the GeoJSON and update bus stops
-            busRoutes = parseBusRoutesFromGeoJson(geoJson)
+            parseBusRoutesFromGeoJson(geoJson)
         } catch (e: Exception) {
             println("Error fetching bus routes: ${e.message}")
+            emptyList()
         }
     }
 
-    // Request the current location
     LaunchedEffect(Unit) {
         fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
             location?.let {
@@ -155,29 +151,41 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
             }
         }
 
-        // Periodically fetch and update buses
-        while (true) {
-            fetchBusesAndUpdateMarkers()
-            fetchBusStopsAndUpdateMarkers()
-            fetchRoutesAndUpdateMarkers()
-            delay(7000) // Update every 7 seconds
+        busStops = fetchBusStops()
+        busRoutes = fetchRoutes()
+        buses = fetchBuses()
+
+        // Initially, only bus stops are visible
+        filteredBusStops = busStops
+        filteredRoutes = busRoutes
+        searchQueryFilteredRoutes = busRoutes
+        filteredBuses = buses
+    }
+
+    // Filter bus routes based on search query (only in the drawer)
+    LaunchedEffect(searchQuery) {
+        searchQueryFilteredRoutes = busRoutes.filter {
+            it.routeNum.contains(searchQuery.text, ignoreCase = true) ||
+                    it.routeTitle.contains(searchQuery.text, ignoreCase = true)
         }
     }
 
-    // Main Scaffold
+    // Handle route selection for filtering on map
+    fun onRouteSelected(route: BusRoute) {
+        // Filter buses based on the base route number (e.g., 7 for 7a, 7b, etc.)
+        val baseRouteNum = route.routeNum.takeWhile { it.isDigit() }
+        filteredRoutes = listOf(route)
+        filteredBuses = buses.filter { it.routeId.startsWith(baseRouteNum) }
+    }
+
     Scaffold(
         topBar = {
             TopMenuBar(
-                onProfileClick = {
-                    println("Profile button clicked!") // Replace with actual navigation logic
-                },
-                onSettingsClick = {
-                    println("Settings button clicked!") // Replace with actual navigation logic
-                }
+                onProfileClick = { /* Handle profile click */ },
+                onSettingsClick = { /* Handle settings click */ }
             )
         }
     ) {
-        // Bottom Sheet Layout
         BottomSheetScaffold(
             scaffoldState = drawerState,
             sheetContent = {
@@ -185,12 +193,11 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
                 val screenHeight = configuration.screenHeightDp.dp
                 val maxHeight = (screenHeight * 5) / 8 // Calculate 5/8th of the screen height
 
-                // Drawer content with height restricted to 5/8 of the screen, but scrollable
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = maxHeight) // Limit height to a maximum of 5/8 screen
-                        .background(color = MaterialTheme.colors.surface) // Plain background
+                        .heightIn(max = maxHeight)
+                        .background(color = MaterialTheme.colors.surface)
                 ) {
                     Column(
                         modifier = Modifier
@@ -207,41 +214,21 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
                             DashedLineIndicator()
                         }
 
-                        // Make the content scrollable
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(vertical = 8.dp)
-                        ) {
-                            // Search bar
-                            item {
-                                OutlinedTextField(
-                                    value = searchQuery,
-                                    onValueChange = { searchQuery = it },
-                                    label = { Text("Search") },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                            }
+                        // Search bar
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { query -> searchQuery = query },
+                            label = { Text("Search Routes") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                            // Drawer content
-                            item {
-                                Text("Nearby Buses:", style = MaterialTheme.typography.h6)
-                                Spacer(modifier = Modifier.height(8.dp))
-                            }
-
-                            // Add each bus as a separate item
-                            items(buses) { bus ->
-                                Text("Bus ${bus.busId}: Route ${bus.routeId}")
-                                Spacer(modifier = Modifier.height(4.dp))
-                            }
-
-                            // Optional: Add a dummy footer or extra space if needed
-                            item {
-                                Spacer(modifier = Modifier.height(24.dp))
-                                Text("End of buses list", style = MaterialTheme.typography.body2)
-                            }
-                        }
+                        // Drawer content with filtered routes
+                        DrawerContent(
+                            filteredRoutes = searchQueryFilteredRoutes,
+                            searchQuery = searchQuery.text,
+                            onRouteSelected = { route -> onRouteSelected(route) }
+                        )
                     }
                 }
             },
@@ -286,7 +273,7 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
                             }
 
                             // Add bus routes
-                            busRoutes.forEach { busRoute ->
+                            filteredRoutes.forEach { busRoute ->
                                 busRoute.coordinates.forEach { segment ->
                                     // Convert each segment to GeoPoints
                                     val geoPoints = segment.map { (latitude, longitude) ->
@@ -307,7 +294,7 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
 
                             // Add bus markers
                             val busIcon by lazy { resizeDrawable(context, R.drawable.bus, 100, 100) }
-                            buses.forEach { bus ->
+                            filteredBuses.forEach { bus ->
                                 val busLocation = GeoPoint(bus.latitude, bus.longitude)
 
                                 val busMarker = Marker(mapView)
@@ -486,4 +473,46 @@ fun parseBusRoutesFromGeoJson(geoJson: String): List<BusRoute> {
     }
 
     return busRoutes
+}
+
+@Composable
+fun DrawerContent(
+    filteredRoutes: List<BusRoute>,
+    searchQuery: String,
+    onRouteSelected: (BusRoute) -> Unit
+) {
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        items(filteredRoutes) { route ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp, horizontal = 16.dp)
+                    .clickable {
+                        onRouteSelected(route)
+                    },
+                shape = MaterialTheme.shapes.medium, // Rounded corners
+                elevation = 4.dp, // Adds shadow for elevation
+                border = BorderStroke(1.dp, Color.Gray), // Gray border around the card
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${route.routeNum}: ${route.routeTitle}",
+                        style = MaterialTheme.typography.h6
+                    )
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "Route Icon",
+                        modifier = Modifier.size(24.dp),
+                        tint = MaterialTheme.colors.primary
+                    )
+                }
+            }
+        }
+    }
 }
