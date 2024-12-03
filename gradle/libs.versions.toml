@@ -28,6 +28,10 @@ okhttp = "4.9.3"
 osmdroidAndroid = "6.1.14"
 playServicesLocation = "21.3.0"
 retrofit = "2.9.0"
+roomCompiler = "2.5.2"
+roomCompilerVersion = "2.5.0"
+roomRuntime = "2.6.1"
+roomRuntimeVersion = "2.5.0"
 ui = "1.7.5"
 uiToolingPreview = "1.7.5"
 uiToolingPreviewVersion = "1.5.0"
@@ -39,6 +43,12 @@ activity-compose-v170 = { module = "androidx.activity:activity-compose", version
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-material = { module = "androidx.compose.material:material", version.ref = "material" }
 androidx-material-v150 = { module = "androidx.compose.material:material", version.ref = "materialVersion" }
+androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "roomRuntime" }
+androidx-room-compiler-v250 = { module = "androidx.room:room-compiler", version.ref = "roomCompilerVersion" }
+androidx-room-compiler-v252 = { module = "androidx.room:room-compiler", version.ref = "roomCompiler" }
+androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "roomRuntime" }
+androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "roomRuntime" }
+androidx-room-runtime-v250 = { module = "androidx.room:room-runtime", version.ref = "roomRuntimeVersion" }
 androidx-ui-tooling-preview-v150 = { module = "androidx.compose.ui:ui-tooling-preview", version.ref = "uiToolingPreviewVersion" }
 androidx-ui-v150 = { module = "androidx.compose.ui:ui", version.ref = "uiVersion" }
 converter-gson = { module = "com.squareup.retrofit2:converter-gson", version.ref = "converterGson" }

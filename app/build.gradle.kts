@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("kotlin-kapt")
     kotlin("plugin.serialization") version "1.8.0" // Use the correct version based on your Kotlin version
 
 }
@@ -85,5 +86,8 @@ dependencies {
     implementation(libs.moshi)
     implementation(libs.moshi.kotlin)
     implementation (libs.gson.v289)
-
+    implementation (libs.androidx.room.runtime.v250)
+    kapt (libs.androidx.room.compiler.v250) // For Kotlin
 }
+
+

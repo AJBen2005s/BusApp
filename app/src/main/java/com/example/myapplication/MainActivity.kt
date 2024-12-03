@@ -1,5 +1,6 @@
 package com.example.myapplication
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
@@ -41,9 +42,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.ui.platform.LocalContext
-
+import androidx.room.Room
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.IOException
@@ -51,9 +55,17 @@ import java.io.IOException
 
 class MainActivity : ComponentActivity() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private lateinit var db: AppDatabase  // Ensure the db is declared here
+
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize the Room database
+        db = Room.databaseBuilder(applicationContext, AppDatabase::class.java, "app_database")
+            .fallbackToDestructiveMigration()
+            .build()
 
         // Initialize the FusedLocationProviderClient
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
@@ -68,7 +80,7 @@ class MainActivity : ComponentActivity() {
         requestLocationPermissions()
 
         setContent {
-            MapScreen(fusedLocationClient)
+            MapScreen(fusedLocationClient, db)  // Pass db to MapScreen
         }
     }
 
@@ -90,7 +102,7 @@ class MainActivity : ComponentActivity() {
 
 @SuppressLint("UnusedMaterialScaffoldPaddingParameter", "MissingPermission")
 @Composable
-fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
+fun MapScreen(fusedLocationClient: FusedLocationProviderClient, db: AppDatabase) {
     var currentLocation by remember { mutableStateOf<GeoPoint?>(null) }
     var buses by remember { mutableStateOf<List<Bus>>(emptyList()) }
     var busStops by remember { mutableStateOf<List<BusStop>>(emptyList()) }
@@ -157,9 +169,7 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
 
         // Initially, only bus stops are visible
         filteredBusStops = busStops
-        filteredRoutes = busRoutes
         searchQueryFilteredRoutes = busRoutes
-        filteredBuses = buses
     }
 
     // Filter bus routes based on search query (only in the drawer)
@@ -227,7 +237,8 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
                         DrawerContent(
                             filteredRoutes = searchQueryFilteredRoutes,
                             searchQuery = searchQuery.text,
-                            onRouteSelected = { route -> onRouteSelected(route) }
+                            onRouteSelected = { route -> onRouteSelected(route) },
+                            db = db  // Pass db to DrawerContent
                         )
                     }
                 }
@@ -286,29 +297,11 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
                                     polyline.color = android.graphics.Color.BLUE // Set the line color
                                     polyline.width = 5.0f // Set line width
                                     polyline.title = busRoute.routeTitle
-
-                                    // Add polyline to the map
                                     mapView.overlays.add(polyline)
                                 }
                             }
 
-                            // Add bus markers
-                            val busIcon by lazy { resizeDrawable(context, R.drawable.bus, 100, 100) }
-                            filteredBuses.forEach { bus ->
-                                val busLocation = GeoPoint(bus.latitude, bus.longitude)
-
-                                val busMarker = Marker(mapView)
-                                busMarker.position = busLocation
-                                busMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                                busMarker.title = "Bus ${bus.busId}: Route ${bus.routeId}"
-                                busMarker.icon = busIcon
-
-                                mapView.overlays.add(busMarker)
-                            }
-
-                            // Redraw the map
-                            mapView.invalidate()
-                            true // Allow map to draw
+                            true // Return true to allow the drawing to continue
                         }
                         mapView
                     },
@@ -318,6 +311,8 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient) {
         }
     }
 }
+
+
 
 @Composable
 fun DashedLineIndicator() {
@@ -475,13 +470,66 @@ fun parseBusRoutesFromGeoJson(geoJson: String): List<BusRoute> {
     return busRoutes
 }
 
+
+
 @Composable
 fun DrawerContent(
     filteredRoutes: List<BusRoute>,
     searchQuery: String,
-    onRouteSelected: (BusRoute) -> Unit
+    onRouteSelected: (BusRoute) -> Unit,
+    db: AppDatabase  // Accept db as a parameter
 ) {
+    var savedRoutes by remember { mutableStateOf<List<SavedRoute>>(emptyList()) }
+
+    // Fetch saved routes in a background thread using a suspend function
+    LaunchedEffect(Unit) {
+        // Run the database fetch operation in IO dispatcher to avoid blocking the main thread
+        savedRoutes = withContext(Dispatchers.IO) {
+            db.savedRouteDao().getAllSavedRoutes()
+        }
+    }
+
     LazyColumn(modifier = Modifier.fillMaxSize()) {
+        // Display saved routes
+        item {
+            Text(
+                text = "Saved Routes",
+                style = MaterialTheme.typography.h6,
+                modifier = Modifier.padding(16.dp)
+            )
+        }
+
+        items(savedRoutes) { savedRoute ->
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp, horizontal = 16.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${savedRoute.routeNum}: ${savedRoute.routeTitle}",
+                        style = MaterialTheme.typography.h6
+                    )
+                }
+            }
+        }
+
+        item {
+            Text(
+                text = "All Routes",
+                style = MaterialTheme.typography.h6,
+                modifier = Modifier.padding(16.dp)
+            )
+        }
+
+        // Display the filtered routes
         items(filteredRoutes) { route ->
             Card(
                 modifier = Modifier
@@ -490,9 +538,8 @@ fun DrawerContent(
                     .clickable {
                         onRouteSelected(route)
                     },
-                shape = MaterialTheme.shapes.medium, // Rounded corners
-                elevation = 4.dp, // Adds shadow for elevation
-                border = BorderStroke(1.dp, Color.Gray), // Gray border around the card
+                shape = MaterialTheme.shapes.medium,
+                elevation = 4.dp
             ) {
                 Row(
                     modifier = Modifier
@@ -505,12 +552,19 @@ fun DrawerContent(
                         text = "${route.routeNum}: ${route.routeTitle}",
                         style = MaterialTheme.typography.h6
                     )
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = "Route Icon",
-                        modifier = Modifier.size(24.dp),
-                        tint = MaterialTheme.colors.primary
-                    )
+                    IconButton(onClick = {
+                        // Save the route to the database within a coroutine
+                        CoroutineScope(Dispatchers.IO).launch {
+                            val savedRoute = SavedRoute(
+                                routeNum = route.routeNum,
+                                routeTitle = route.routeTitle,
+                                coordinates = route.coordinates.toString() // Store the coordinates as a string
+                            )
+                            db.savedRouteDao().insert(savedRoute)  // Insert into the database
+                        }
+                    }) {
+                        Icon(imageVector = Icons.Default.Star, contentDescription = "Save Route")
+                    }
                 }
             }
         }
