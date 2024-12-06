@@ -13,8 +13,7 @@ import androidx.room.RoomDatabase
 data class SavedRoute(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val routeNum: String,
-    val routeTitle: String,
-    val coordinates: String // Store coordinates as a String for simplicity
+    val routeTitle: String
 )
 
 @Dao

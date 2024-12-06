@@ -39,6 +39,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
@@ -118,7 +119,7 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient, db: AppDatabase)
 
     val context = LocalContext.current
 
-    // Fetch buses, bus stops, and routes as before
+    // Fetch buses, bus stops, and routes
     suspend fun fetchBuses(): List<Bus> {
         return try {
             val busResponse = RetrofitInstance.api.getBuses()
@@ -286,19 +287,27 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient, db: AppDatabase)
                             // Add bus routes
                             filteredRoutes.forEach { busRoute ->
                                 busRoute.coordinates.forEach { segment ->
-                                    // Convert each segment to GeoPoints
                                     val geoPoints = segment.map { (latitude, longitude) ->
                                         GeoPoint(latitude, longitude)
                                     }
-
-                                    // Create a polyline
                                     val polyline = org.osmdroid.views.overlay.Polyline()
                                     polyline.setPoints(geoPoints)
-                                    polyline.color = android.graphics.Color.BLUE // Set the line color
-                                    polyline.width = 5.0f // Set line width
+                                    polyline.color = android.graphics.Color.BLUE
+                                    polyline.width = 5.0f
                                     polyline.title = busRoute.routeTitle
                                     mapView.overlays.add(polyline)
                                 }
+                            }
+
+                            // Add bus markers for the filtered route
+                            val busIcon by lazy { resizeDrawable(context, R.drawable.bus, 100, 100) }
+                            filteredBuses.forEach { bus ->
+                                val busMarker = Marker(mapView)
+                                busMarker.position = GeoPoint(bus.latitude, bus.longitude)
+                                busMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                                busMarker.title = "Bus ${bus.busId} on route ${bus.routeId}"
+                                busMarker.icon = busIcon
+                                mapView.overlays.add(busMarker)
                             }
 
                             true // Return true to allow the drawing to continue
@@ -477,7 +486,7 @@ fun DrawerContent(
     filteredRoutes: List<BusRoute>,
     searchQuery: String,
     onRouteSelected: (BusRoute) -> Unit,
-    db: AppDatabase  // Accept db as a parameter
+    db: AppDatabase
 ) {
     var savedRoutes by remember { mutableStateOf<List<SavedRoute>>(emptyList()) }
 
@@ -505,6 +514,11 @@ fun DrawerContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp, horizontal = 16.dp)
+                    .clickable {
+                        // Find the corresponding route using savedRoute
+                        val selectedRoute = filteredRoutes.find { it.routeNum == savedRoute.routeNum }!!
+                        onRouteSelected(selectedRoute)
+                    }
             ) {
                 Row(
                     modifier = Modifier
@@ -517,6 +531,14 @@ fun DrawerContent(
                         text = "${savedRoute.routeNum}: ${savedRoute.routeTitle}",
                         style = MaterialTheme.typography.h6
                     )
+                    IconButton(onClick = {
+                        // Delete the route from the database
+                        CoroutineScope(Dispatchers.IO).launch {
+                            db.savedRouteDao().delete(savedRoute)  // Delete the route
+                        }
+                    }) {
+                        Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete Route")
+                    }
                 }
             }
         }
@@ -557,8 +579,7 @@ fun DrawerContent(
                         CoroutineScope(Dispatchers.IO).launch {
                             val savedRoute = SavedRoute(
                                 routeNum = route.routeNum,
-                                routeTitle = route.routeTitle,
-                                coordinates = route.coordinates.toString() // Store the coordinates as a string
+                                routeTitle = route.routeTitle
                             )
                             db.savedRouteDao().insert(savedRoute)  // Insert into the database
                         }
