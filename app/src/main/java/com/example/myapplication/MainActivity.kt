@@ -1,6 +1,5 @@
 package com.example.myapplication
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
@@ -12,7 +11,6 @@ import android.location.Location
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.*
@@ -40,7 +38,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
@@ -498,6 +495,13 @@ fun DrawerContent(
         }
     }
 
+    // Function to refresh saved routes
+    fun refreshSavedRoutes() {
+        CoroutineScope(Dispatchers.IO).launch {
+            savedRoutes = db.savedRouteDao().getAllSavedRoutes()
+        }
+    }
+
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         // Display saved routes
         item {
@@ -509,7 +513,6 @@ fun DrawerContent(
         }
 
         items(savedRoutes) { savedRoute ->
-
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -534,7 +537,8 @@ fun DrawerContent(
                     IconButton(onClick = {
                         // Delete the route from the database
                         CoroutineScope(Dispatchers.IO).launch {
-                            db.savedRouteDao().delete(savedRoute)  // Delete the route
+                            db.savedRouteDao().delete(savedRoute)
+                            refreshSavedRoutes()  // Refresh the saved routes list
                         }
                     }) {
                         Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete Route")
@@ -581,7 +585,8 @@ fun DrawerContent(
                                 routeNum = route.routeNum,
                                 routeTitle = route.routeTitle
                             )
-                            db.savedRouteDao().insert(savedRoute)  // Insert into the database
+                            db.savedRouteDao().insert(savedRoute)
+                            refreshSavedRoutes()  // Refresh the saved routes list
                         }
                     }) {
                         Icon(imageVector = Icons.Default.Star, contentDescription = "Save Route")
