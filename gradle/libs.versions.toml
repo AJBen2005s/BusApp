@@ -37,6 +37,7 @@ uiToolingPreview = "1.7.5"
 uiToolingPreviewVersion = "1.5.0"
 uiVersion = "1.5.0"
 coreSplashscreen = "1.0.1"
+runtimeLivedata = "1.7.5"
 
 [libraries]
 activity-compose-v170 = { module = "androidx.activity:activity-compose", version.ref = "androidxActivityCompose" }
@@ -84,6 +85,7 @@ retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit
 ui = { module = "androidx.compose.ui:ui", version.ref = "ui" }
 ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview", version.ref = "uiToolingPreview" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
+androidx-runtime-livedata = { group = "androidx.compose.runtime", name = "runtime-livedata", version.ref = "runtimeLivedata" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

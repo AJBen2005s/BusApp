@@ -2,6 +2,7 @@ package com.example.myapplication
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -50,13 +51,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.IOException
-
+import androidx.activity.viewModels
+import androidx.compose.runtime.livedata.observeAsState
 
 class MainActivity : ComponentActivity() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
-    private lateinit var db: AppDatabase  // Ensure the db is declared here
-
-
+    private lateinit var db: AppDatabase
+    private val darkModeViewModel: DarkModeViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -79,7 +80,12 @@ class MainActivity : ComponentActivity() {
         requestLocationPermissions()
 
         setContent {
-            MapScreen(fusedLocationClient, db)  // Pass db to MapScreen
+            val isDarkMode by darkModeViewModel.isDarkMode.observeAsState(
+                initial = getSharedPreferences("app_preferences", Context.MODE_PRIVATE).getBoolean("dark_mode", false)
+            )
+            MyApplicationTheme(darkTheme = isDarkMode) {
+                MapScreen(fusedLocationClient, db)
+            }
         }
     }
 
@@ -204,8 +210,9 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient, db: AppDatabase)
         topBar = {
             TopMenuBar(
                 onProfileClick = { /* Handle profile click */ },
-                onSettingsClick = { /* Handle settings click */ }
-            )
+                onSettingsClick = {
+                    context.startActivity(Intent(context, SettingsActivity::class.java))
+                }            )
         }
     ) {
         BottomSheetScaffold(
