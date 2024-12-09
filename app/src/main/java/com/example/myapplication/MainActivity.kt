@@ -45,6 +45,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.room.Room
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -184,6 +185,19 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient, db: AppDatabase)
         val baseRouteNum = route.routeNum.takeWhile { it.isDigit() }
         filteredRoutes = listOf(route)
         filteredBuses = buses.filter { it.routeId.startsWith(baseRouteNum) }
+    }
+
+    // Periodically update bus markers every 7 seconds
+    LaunchedEffect(filteredRoutes) {
+        while (true) {
+            delay(7000)
+            buses = fetchBuses()
+            filteredBuses = buses.filter { bus ->
+                filteredRoutes.any { route ->
+                    bus.routeId.startsWith(route.routeNum.takeWhile { it.isDigit() })
+                }
+            }
+        }
     }
 
     Scaffold(
