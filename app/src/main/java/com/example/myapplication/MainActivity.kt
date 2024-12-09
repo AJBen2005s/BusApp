@@ -209,7 +209,9 @@ fun MapScreen(fusedLocationClient: FusedLocationProviderClient, db: AppDatabase)
     Scaffold(
         topBar = {
             TopMenuBar(
-                onProfileClick = { /* Handle profile click */ },
+                onProfileClick = {
+                    context.startActivity(Intent(context, ProfileActivity::class.java))
+                },
                 onSettingsClick = {
                     context.startActivity(Intent(context, SettingsActivity::class.java))
                 }            )
