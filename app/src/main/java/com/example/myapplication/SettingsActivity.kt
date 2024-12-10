@@ -18,8 +18,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.ui.platform.LocalContext
 import android.content.Context
-import android.content.SharedPreferences
-import androidx.activity.viewModels
 import androidx.compose.runtime.livedata.observeAsState
 
 
@@ -33,6 +31,7 @@ class SettingsActivity : ComponentActivity() {
         }
     }
 }
+
 
 @SuppressLint("UnusedMaterialScaffoldPaddingParameter")
 @Composable

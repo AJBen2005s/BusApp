@@ -51,13 +51,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.IOException
-import androidx.activity.viewModels
 import androidx.compose.runtime.livedata.observeAsState
 
 class MainActivity : ComponentActivity() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var db: AppDatabase
-    private val darkModeViewModel: DarkModeViewModel by viewModels()
+    private val darkModeViewModel: DarkModeViewModel by lazy { DarkModeViewModel.getInstance() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -104,6 +103,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
 
 @SuppressLint("UnusedMaterialScaffoldPaddingParameter", "MissingPermission")
 @Composable

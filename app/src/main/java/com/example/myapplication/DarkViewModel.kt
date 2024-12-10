@@ -3,7 +3,6 @@ package com.example.myapplication
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 
 class DarkModeViewModel : ViewModel() {
     private val _isDarkMode = MutableLiveData<Boolean>()
@@ -18,7 +17,7 @@ class DarkModeViewModel : ViewModel() {
 
         fun getInstance(): DarkModeViewModel {
             if (instance == null) {
-                instance = ViewModelProvider.NewInstanceFactory().create(DarkModeViewModel::class.java)
+                instance = DarkModeViewModel()
             }
             return instance!!
         }
